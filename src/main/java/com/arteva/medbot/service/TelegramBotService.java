@@ -25,11 +25,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Telegram bot that receives user messages via long polling
- * and answers questions using the RAG pipeline.
+ * Telegram-бот для ответов на вопросы по медицинскому лицензированию.
  * <p>
- * Message processing is dispatched to a thread pool to avoid blocking the polling thread.
- * /reindex command requires the caller's chatId to be in the admin whitelist.
+ * Реализует Long Polling для получения сообщений от Telegram.
+ * <p>
+ * Особенности:
+ * <ul>
+ *   <li>Асинхронная обработка через {@code TaskExecutor} (не блокирует polling)</li>
+ *   <li>Белый список администраторов для команды {@code /reindex}</li>
+ *   <li>Rate limiting: 10 сообщений в минуту на пользователя</li>
+ *   <li>Автоматическое разбиение длинных ответов на части по 4096 символов</li>
+ * </ul>
+ * <p>
+ * Команды:
+ * <ul>
+ *   <li>{@code /start} — приветствие</li>
+ *   <li>{@code /help} — справка</li>
+ *   <li>{@code /reindex} — переиндексация (только администраторы)</li>
+ *   <li>Любой другой текст — вопрос к RAG-пайплайну</li>
+ * </ul>
+ *
+ * @see RagService
+ * @see DocumentIngestionService
  */
 @Component
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "true", matchIfMissing = true)

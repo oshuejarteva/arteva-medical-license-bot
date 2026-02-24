@@ -9,14 +9,30 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Qdrant vector store configuration.
- * Creates the EmbeddingStore bean and ensures the collection exists on startup.
+ * Конфигурация векторного хранилища Qdrant.
+ * <p>
+ * При старте приложения:
+ * <ol>
+ *   <li>Проверяет наличие коллекции в Qdrant (создаёт, если отсутствует)</li>
+ *   <li>Создаёт бин {@link QdrantEmbeddingStore} для работы с эмбеддингами</li>
+ * </ol>
+ *
+ * @see QdrantCollectionManager
  */
 @Configuration
 public class QdrantConfig {
 
     private static final Logger log = LoggerFactory.getLogger(QdrantConfig.class);
 
+    /**
+     * Создаёт хранилище эмбеддингов и гарантирует наличие коллекции.
+     *
+     * @param host              хост Qdrant
+     * @param port              gRPC-порт Qdrant
+     * @param collectionName    имя коллекции
+     * @param collectionManager менеджер жизненного цикла коллекции
+     * @return настроенное хранилище эмбеддингов
+     */
     @Bean
     public QdrantEmbeddingStore embeddingStore(
             @Value("${qdrant.host}") String host,

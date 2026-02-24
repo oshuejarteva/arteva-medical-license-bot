@@ -11,8 +11,16 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Manages Qdrant collection lifecycle: creation, deletion, recreation.
- * Separated from configuration for SRP compliance.
+ * Менеджер жизненного цикла коллекции Qdrant.
+ * <p>
+ * Отвечает за:
+ * <ul>
+ *   <li>Создание коллекции при первом запуске ({@link #ensureCollectionExists()})</li>
+ *   <li>Пересоздание коллекции при полной переиндексации ({@link #recreateCollection()})</li>
+ * </ul>
+ * <p>
+ * Выделен из конфигурации для соблюдения принципа единой ответственности (SRP).
+ * Использует try-with-resources для корректного закрытия gRPC-клиента.
  */
 @Service
 public class QdrantCollectionManager {
@@ -36,8 +44,12 @@ public class QdrantCollectionManager {
     }
 
     /**
-     * Ensures the configured collection exists. Creates it if missing.
-     * Called during application startup.
+     * Проверяет наличие коллекции и создаёт её при отсутствии.
+     * <p>
+     * Вызывается при старте приложения. При ошибке подключения к Qdrant
+     * выбрасывает {@link IllegalStateException} (fail-fast).
+     *
+     * @throws IllegalStateException если невозможно создать/проверить коллекцию
      */
     public void ensureCollectionExists() {
         try (QdrantClient client = createClient()) {
@@ -65,7 +77,12 @@ public class QdrantCollectionManager {
     }
 
     /**
-     * Drops and recreates the collection. Used during full reindex.
+     * Удаляет и пересоздаёт коллекцию.
+     * <p>
+     * Используется при полной переиндексации.
+     * Если коллекция не существует — просто создаёт новую.
+     *
+     * @throws RuntimeException при ошибке подключения к Qdrant
      */
     public void recreateCollection() {
         try (QdrantClient client = createClient()) {

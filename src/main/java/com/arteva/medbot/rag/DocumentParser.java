@@ -20,8 +20,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Reads DOC and DOCX files from the local filesystem using Apache POI
- * and converts them into LangChain4j {@link Document} objects.
+ * Парсер документов DOC и DOCX.
+ * <p>
+ * Читает файлы с локальной файловой системы с помощью Apache POI
+ * и преобразует их в объекты {@link Document} (LangChain4j).
+ * <p>
+ * Поддерживаемые форматы:
+ * <ul>
+ *   <li><b>DOCX</b> (Office Open XML) — извлекает параграфы и таблицы</li>
+ *   <li><b>DOC</b> (устаревший бинарный формат) — извлекает весь текст</li>
+ * </ul>
+ * <p>
+ * Каждый документ сохраняет метаданные {@code source} с именем файла.
  */
 @Component
 public class DocumentParser {
@@ -29,10 +39,11 @@ public class DocumentParser {
     private static final Logger log = LoggerFactory.getLogger(DocumentParser.class);
 
     /**
-     * Parses all DOC/DOCX files from the given directory.
+     * Парсит все DOC/DOCX-файлы из указанной директории.
      *
-     * @param docsPath path to the directory containing documents
-     * @return list of parsed {@link Document} objects with source metadata
+     * @param docsPath путь к папке с документами
+     * @return список распарсенных документов с метаданными источника.
+     *         Пустой список, если папка не существует или файлы не найдены.
      */
     public List<Document> parseAll(String docsPath) {
         List<Document> documents = new ArrayList<>();
@@ -83,8 +94,10 @@ public class DocumentParser {
     }
 
     /**
-     * Extracts text from a DOCX file (Office Open XML).
-     * Reads both paragraphs and table content.
+     * Извлекает текст из DOCX-файла (Office Open XML).
+     * <p>
+     * Извлекает как параграфы, так и содержимое таблиц
+     * (ячейки разделяются {@code " | "}).
      */
     private String extractDocx(File file) throws IOException {
         try (FileInputStream fis = new FileInputStream(file);
@@ -121,7 +134,7 @@ public class DocumentParser {
     }
 
     /**
-     * Extracts text from a DOC file (legacy binary format).
+     * Извлекает текст из DOC-файла (устаревший бинарный формат Microsoft Word).
      */
     private String extractDoc(File file) throws IOException {
         try (FileInputStream fis = new FileInputStream(file);

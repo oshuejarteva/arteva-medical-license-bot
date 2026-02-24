@@ -1,11 +1,17 @@
 package com.arteva.medbot.util;
 
 /**
- * Thread-safe fixed-window token bucket for rate limiting.
+ * Потокобезопасный алгоритм «token bucket» с фиксированным временным окном.
  * <p>
- * Tokens are refilled to full capacity at the start of each window.
- * Each {@link #tryConsume()} call decrements the available tokens
- * and returns {@code false} when exhausted.
+ * Принцип работы:
+ * <ul>
+ *   <li>В начале каждого временного окна токены восстанавливаются до полной ёмкости</li>
+ *   <li>Каждый вызов {@link #tryConsume()} уменьшает счётчик на 1</li>
+ *   <li>При исчерпании токенов возвращается {@code false}</li>
+ * </ul>
+ * <p>
+ * Используется в {@link com.arteva.medbot.config.RateLimitFilter}
+ * и {@link com.arteva.medbot.service.TelegramBotService} для ограничения частоты запросов.
  */
 public class TokenBucket {
 
@@ -14,6 +20,12 @@ public class TokenBucket {
     private int tokens;
     private long windowStart;
 
+    /**
+     * Создаёт новый бакет с указанной ёмкостью и длительностью окна.
+     *
+     * @param capacity максимальное количество токенов за одно окно
+     * @param windowMs длительность окна в миллисекундах
+     */
     public TokenBucket(int capacity, long windowMs) {
         this.capacity = capacity;
         this.windowMs = windowMs;
@@ -22,9 +34,11 @@ public class TokenBucket {
     }
 
     /**
-     * Attempts to consume one token.
+     * Попытка потребить один токен.
+     * <p>
+     * Если временное окно истекло — счётчик сбрасывается до полной ёмкости.
      *
-     * @return true if a token was available, false if rate limit exceeded
+     * @return {@code true}, если токен был доступен; {@code false}, если лимит исчерпан
      */
     public synchronized boolean tryConsume() {
         long now = System.currentTimeMillis();
@@ -40,12 +54,13 @@ public class TokenBucket {
     }
 
     /**
-     * Checks whether this bucket has been idle for longer than the given threshold.
-     * Used for periodic cleanup of stale entries.
+     * Проверяет, является ли бакет устаревшим (неактивным).
+     * <p>
+     * Используется для периодической очистки коллекции бакетов.
      *
-     * @param now              current time in milliseconds
-     * @param idleThresholdMs  idle threshold in milliseconds
-     * @return true if bucket is expired
+     * @param now             текущее время в миллисекундах
+     * @param idleThresholdMs порог неактивности в миллисекундах
+     * @return {@code true}, если бакет неактивен дольше порога
      */
     public synchronized boolean isExpired(long now, long idleThresholdMs) {
         return now - windowStart > idleThresholdMs;

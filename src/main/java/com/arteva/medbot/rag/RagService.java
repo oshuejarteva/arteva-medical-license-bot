@@ -25,13 +25,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * RAG (Retrieval-Augmented Generation) service.
+ * Сервис RAG (Retrieval-Augmented Generation).
  * <p>
- * 1. Embeds the user question
- * 2. Searches Qdrant for relevant document chunks
- * 3. Builds a prompt with context
- * 4. Calls the LLM via OpenRouter
- * 5. Returns answer + source references
+ * Основной пайплайн обработки вопросов:
+ * <ol>
+ *   <li>Генерация эмбеддинга вопроса пользователя</li>
+ *   <li>Семантический поиск релевантных фрагментов в Qdrant</li>
+ *   <li>Формирование промпта с контекстом из документов</li>
+ *   <li>Вызов LLM через OpenRouter</li>
+ *   <li>Возврат ответа со списком источников</li>
+ * </ol>
+ * <p>
+ * Если релевантных фрагментов не найдено — возвращает {@link AskResponse#noInfo()}.
+ * При ошибке LLM — возвращает ответ с сообщением об ошибке.
  */
 @Service
 public class RagService {
@@ -66,10 +72,10 @@ public class RagService {
     }
 
     /**
-     * Processes a user question through the RAG pipeline.
+     * Обрабатывает вопрос пользователя через RAG-пайплайн.
      *
-     * @param question the user's question
-     * @return answer with source documents
+     * @param question текст вопроса пользователя
+     * @return ответ с текстом и списком источников
      */
     public AskResponse ask(String question) {
         log.debug("Processing question: {}", question.length() > 200 ? question.substring(0, 200) + "..." : question);

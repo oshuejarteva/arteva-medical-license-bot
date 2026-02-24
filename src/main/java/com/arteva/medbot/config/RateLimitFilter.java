@@ -21,10 +21,19 @@ import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Simple per-IP rate limiting filter for HTTP endpoints.
- * Uses a fixed-window token bucket per client IP address.
+ * HTTP-фильтр ограничения частоты запросов (rate limiting) по IP-адресу клиента.
  * <p>
- * Old entries are cleaned up every 5 minutes to prevent memory leaks.
+ * Реализует алгоритм «tokenBucket с фиксированным окном»:
+ * каждому IP даётся N токенов в минуту; при исчерпании — {@code 429 Too Many Requests}.
+ * <p>
+ * Особенности:
+ * <ul>
+ *   <li>Эндпоинты {@code /actuator/**} не ограничиваются (для мониторинга)</li>
+ *   <li>Поддерживается заголовок {@code X-Forwarded-For} (для работы за reverse-proxy)</li>
+ *   <li>Устаревшие бакеты очищаются каждые 5 минут для предотвращения утечек памяти</li>
+ * </ul>
+ *
+ * @see TokenBucket
  */
 @Component
 @Order(1)
@@ -73,9 +82,12 @@ public class RateLimitFilter implements Filter {
     }
 
     /**
-     * Periodic cleanup of expired buckets to prevent unbounded memory growth.
+     * Периодическая очистка устаревших бакетов для предотвращения
+     * неограниченного роста памяти.
+     * <p>
+     * Запускается каждые 5 минут. Удаляет бакеты, неактивные более 2 минут.
      */
-    @Scheduled(fixedRate = 300_000) // every 5 minutes
+    @Scheduled(fixedRate = 300_000) // каждые 5 минут
     public void cleanupExpiredBuckets() {
         long now = System.currentTimeMillis();
         buckets.entrySet().removeIf(e -> e.getValue().isExpired(now, windowMs * 2));

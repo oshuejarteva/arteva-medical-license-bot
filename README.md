@@ -1,113 +1,221 @@
-# Medical License Bot
+# 🏥 Medical License Bot
 
-Telegram-бот с RAG (Retrieval-Augmented Generation) для ответов на вопросы по медицинским документам (DOC/DOCX).
+> Telegram-бот и REST API для ответов на вопросы по медицинскому лицензированию  
+> на основе технологии **RAG** (Retrieval-Augmented Generation).
 
-## Архитектура
+[![Java](https://img.shields.io/badge/Java-21-orange)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.5-brightgreen)](https://spring.io/projects/spring-boot)
+[![LangChain4j](https://img.shields.io/badge/LangChain4j-0.35.0-blue)](https://github.com/langchain4j/langchain4j)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
+---
+
+## 📋 Содержание
+
+- [Обзор](#-обзор)
+- [Архитектура](#-архитектура)
+- [Технологический стек](#-технологический-стек)
+- [Быстрый старт](#-быстрый-старт)
+- [Конфигурация](#-конфигурация)
+- [REST API](#-rest-api)
+- [Telegram-бот](#-telegram-бот)
+- [Безопасность](#-безопасность)
+- [Мониторинг и метрики](#-мониторинг-и-метрики)
+- [Документация](#-документация)
+- [Разработка](#-разработка)
+
+---
+
+## 🔍 Обзор
+
+**Medical License Bot** — это интеллектуальный помощник, который отвечает на вопросы
+пользователей по медицинскому лицензированию, опираясь **исключительно** на загруженные
+документы (`.doc`/`.docx`).
+
+### Как это работает
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌─────────┐
-│  Telegram    │────▶│  Spring Boot App │────▶│  Qdrant │
-│  (вопрос)   │◀────│                  │     │ (vector │
-└─────────────┘     │  ┌────────────┐  │     │  store) │
-                    │  │ RAG Service│  │     └─────────┘
-┌─────────────┐     │  └─────┬──────┘  │
-│  REST API   │────▶│        │         │     ┌──────────┐
-│  /ask       │◀────│        ▼         │────▶│OpenRouter│
-│  /reindex   │     │  ┌────────────┐  │◀────│  (LLM)   │
-└─────────────┘     │  │  LLM Call  │  │     └──────────┘
-                    │  └────────────┘  │
-                    └──────────────────┘
+Пользователь → Вопрос → Embedding → Семантический поиск (Qdrant) → Релевантные фрагменты → LLM (OpenRouter) → Ответ
 ```
 
-## Стек технологий
+1. Пользователь задаёт вопрос (через Telegram или REST API)
+2. Вопрос преобразуется в вектор (embedding)
+3. В Qdrant ищутся наиболее похожие фрагменты документов
+4. Найденные фрагменты вместе с вопросом отправляются в LLM
+5. LLM формирует ответ **только** на основе найденного контекста
+6. Ответ возвращается пользователю с указанием источников
 
-| Компонент      | Технология                        |
-|----------------|-----------------------------------|
-| Язык           | Java 21                           |
-| Фреймворк      | Spring Boot 3.3                   |
-| Сборка         | Maven                             |
-| RAG Framework  | LangChain4j 0.35                  |
-| Vector Store   | Qdrant                            |
-| LLM            | OpenRouter (OpenAI-compatible)    |
-| Документы      | Apache POI (DOC/DOCX)             |
-| Telegram       | TelegramBots (long polling)       |
-| Контейнеры     | Docker + docker-compose           |
+---
 
-## Быстрый старт
+## 🏗 Архитектура
 
-### 1. Клонируйте репозиторий
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Medical License Bot                    │
+├─────────────────┬───────────────────────────────────────┤
+│   Telegram Bot  │           REST API                     │
+│  (Long Polling) │  POST /ask     POST /reindex           │
+├─────────────────┴───────────────────────────────────────┤
+│                    RAG Pipeline                           │
+│  ┌──────────┐  ┌───────────┐  ┌─────────┐  ┌─────────┐ │
+│  │ Document │→ │ Embedding │→ │  Qdrant │→ │   LLM   │ │
+│  │  Parser  │  │   Model   │  │(вектор.)│  │(OpenAI) │ │
+│  └──────────┘  └───────────┘  └─────────┘  └─────────┘ │
+├─────────────────────────────────────────────────────────┤
+│  Security │ Rate Limiting │ Monitoring │ Graceful Stop   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Структура пакетов
+
+```
+com.arteva.medbot
+├── config/               — Конфигурация (Security, LLM, Qdrant, Telegram, Rate Limit)
+├── controller/           — REST-контроллеры (AskController, GlobalExceptionHandler)
+├── model/                — DTO (AskRequest, AskResponse)
+├── rag/                  — RAG-пайплайн (RagService, DocumentParser, Ingestion, Qdrant)
+├── service/              — Telegram-бот (TelegramBotService)
+└── util/                 — Утилиты (TokenBucket)
+```
+
+---
+
+## 🛠 Технологический стек
+
+| Компонент             | Технология                          | Версия   |
+|-----------------------|-------------------------------------|----------|
+| Язык                  | Java                                | 21       |
+| Фреймворк             | Spring Boot                         | 3.3.5    |
+| RAG Framework         | LangChain4j                         | 0.35.0   |
+| LLM / Embeddings      | OpenRouter (OpenAI-совместимый API) | —        |
+| Векторная БД          | Qdrant                              | 1.12.1   |
+| Парсинг документов    | Apache POI                          | 5.2.5    |
+| Telegram              | TelegramBots                        | 6.9.7.1  |
+| Безопасность          | Spring Security (Basic Auth)        | —        |
+| Метрики               | Micrometer + Prometheus             | —        |
+| Логирование           | Logback + Logstash Encoder (JSON)   | 7.4      |
+| Контейнеризация       | Docker (multi-stage build)          | —        |
+
+---
+
+## 🚀 Быстрый старт
+
+### Предварительные требования
+
+- Docker и Docker Compose
+- API-ключ [OpenRouter](https://openrouter.ai/keys)
+- Токен Telegram-бота от [@BotFather](https://t.me/BotFather)
+
+### Шаги запуска
+
+**1. Клонируйте репозиторий:**
 
 ```bash
-git clone https://github.com/oshuejarteva/arteva-medical-license-bot.git
-cd arteva-medical-license-bot
+git clone https://github.com/arteva/medical-license-bot.git
+cd medical-license-bot
 ```
 
-### 2. Создайте файл окружения
+**2. Создайте `.env` файл:**
 
 ```bash
 cp .env.example .env
 ```
 
-Отредактируйте `.env`:
+**3. Заполните обязательные переменные в `.env`:**
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-ваш-ключ
-TELEGRAM_TOKEN=ваш-токен-бота
+TELEGRAM_TOKEN=123456789:ваш-токен
 TELEGRAM_USERNAME=ИмяВашегоБота
+API_ADMIN_PASSWORD=надёжный-пароль
 ```
 
-### 3. Добавьте документы
-
-Поместите DOC/DOCX файлы в папку `./docs/`:
+**4. Положите документы в папку `docs/`:**
 
 ```bash
-cp ~/documents/*.docx ./docs/
+cp /путь/к/документам/*.docx ./docs/
 ```
 
-### 4. Запустите через Docker Compose
+**5. Запустите:**
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-Сервис будет доступен:
-- **REST API**: http://localhost:8080
-- **Qdrant Dashboard**: http://localhost:6333/dashboard
-
-### 5. Проиндексируйте документы
+**6. Проверьте работоспособность:**
 
 ```bash
-curl -X POST http://localhost:8080/reindex
+# Healthcheck
+curl http://localhost:8080/actuator/health
+
+# Переиндексация документов
+curl -X POST http://localhost:8080/reindex \
+  -u admin:ваш-пароль
+
+# Задать вопрос
+curl -X POST http://localhost:8080/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Какие требования к лицензии?"}'
 ```
 
-Или отправьте `/reindex` боту в Telegram.
+---
 
-## API
+## ⚙ Конфигурация
 
-### POST /ask
+Конфигурация задаётся через переменные окружения. Полный список с описаниями — в [.env.example](.env.example).
 
-Задать вопрос по документам.
+| Переменная                   | Описание                                      | По умолчанию                          | Обязательна |
+|------------------------------|-----------------------------------------------|---------------------------------------|-------------|
+| `OPENROUTER_API_KEY`         | API-ключ OpenRouter                            | —                                     | ✅          |
+| `OPENROUTER_MODEL`           | Модель генерации ответов                       | `google/gemini-2.0-flash-001`         | ❌          |
+| `OPENROUTER_EMBEDDING_MODEL` | Модель эмбеддингов                             | `openai/text-embedding-3-small`       | ❌          |
+| `TELEGRAM_TOKEN`             | Токен Telegram-бота                            | —                                     | ✅          |
+| `TELEGRAM_USERNAME`          | Username бота                                  | `MedLicenseBot`                       | ❌          |
+| `TELEGRAM_ADMIN_CHAT_IDS`    | ID администраторов (через запятую)             | —                                     | ❌          |
+| `API_ADMIN_USERNAME`         | Логин для Basic Auth                           | `admin`                               | ❌          |
+| `API_ADMIN_PASSWORD`         | Пароль для Basic Auth                          | —                                     | ✅          |
+| `RATE_LIMIT_RPM`             | Макс. запросов/мин с одного IP                 | `30`                                  | ❌          |
+| `QDRANT_HOST`                | Хост Qdrant                                    | `localhost` (Docker: `qdrant`)        | ❌          |
+| `QDRANT_PORT`                | gRPC-порт Qdrant                               | `6334`                                | ❌          |
+| `RAG_TOP_K`                  | Кол-во извлекаемых фрагментов                  | `6`                                   | ❌          |
+| `RAG_SIMILARITY_THRESHOLD`   | Минимальный порог сходства                     | `0.75`                                | ❌          |
 
-**Request:**
+Подробные комментарии — в [application.yml](src/main/resources/application.yml).
+
+---
+
+## 📡 REST API
+
+### POST /ask — Задать вопрос (публичный)
+
+**Запрос:**
 ```json
 {
   "question": "Какие документы нужны для получения медицинской лицензии?"
 }
 ```
 
-**Response:**
+**Ответ (200 OK):**
 ```json
 {
   "answer": "Для получения медицинской лицензии необходимы следующие документы: ...",
-  "sources": ["license-requirements.docx", "regulations-2024.docx"]
+  "sources": ["license-requirements.docx", "order-123.doc"]
 }
 ```
 
-### POST /reindex
+**Ошибки:**
+| Код | Описание                             |
+|-----|--------------------------------------|
+| 400 | Пустой вопрос или > 4000 символов    |
+| 429 | Превышен лимит запросов              |
 
-Переиндексация всех документов из папки `./docs`.
+### POST /reindex — Переиндексация (требует ADMIN)
 
-**Response:**
+```bash
+curl -X POST http://localhost:8080/reindex -u admin:пароль
+```
+
+**Ответ (200 OK):**
 ```json
 {
   "status": "completed",
@@ -115,61 +223,142 @@ curl -X POST http://localhost:8080/reindex
 }
 ```
 
-## Telegram-команды
+**Ошибки:**
+| Код | Описание                                |
+|-----|-----------------------------------------|
+| 401 | Не авторизован                           |
+| 403 | Недостаточно прав                        |
+| 409 | Переиндексация уже выполняется           |
 
-| Команда     | Описание                          |
-|-------------|-----------------------------------|
-| `/start`    | Приветствие и справка             |
-| `/help`     | Краткая справка                   |
-| `/reindex`  | Переиндексация документов         |
-| *любой текст* | Вопрос по документам            |
+---
 
-## Как добавить новые документы
+## 🤖 Telegram-бот
 
-1. Поместите файлы `.doc` или `.docx` в папку `./docs/`
-2. Вызовите переиндексацию:
-   ```bash
-   curl -X POST http://localhost:8080/reindex
-   ```
-   или отправьте `/reindex` в Telegram-бот.
+### Команды
 
-## Конфигурация
+| Команда        | Описание                                | Доступ          |
+|---------------|------------------------------------------|-----------------|
+| `/start`      | Приветствие и описание бота              | Все             |
+| `/help`       | Справка по использованию                  | Все             |
+| `/reindex`    | Запуск переиндексации документов          | Администраторы  |
+| *Любой текст* | Вопрос к RAG-пайплайну                   | Все             |
 
-Все параметры задаются через переменные окружения или `application.yml`:
+### Ограничения
 
-| Параметр                     | Описание                                    | По умолчанию                         |
-|------------------------------|---------------------------------------------|--------------------------------------|
-| `OPENROUTER_API_KEY`         | API-ключ OpenRouter                         | —                                    |
-| `OPENROUTER_MODEL`           | Модель LLM                                  | `google/gemini-2.0-flash-001`        |
-| `OPENROUTER_EMBEDDING_MODEL` | Модель эмбеддингов                          | `openai/text-embedding-3-small`      |
-| `OPENROUTER_BASE_URL`        | Base URL для LLM API                        | `https://openrouter.ai/api/v1`       |
-| `OPENROUTER_TEMPERATURE`     | Температура генерации                       | `0.1`                                |
-| `QDRANT_HOST`                | Хост Qdrant                                 | `localhost`                          |
-| `QDRANT_PORT`                | gRPC-порт Qdrant                            | `6334`                               |
-| `QDRANT_COLLECTION`          | Название коллекции                          | `medical-documents`                  |
-| `QDRANT_DIMENSION`           | Размерность векторов                        | `1536`                               |
-| `RAG_TOP_K`                  | Кол-во возвращаемых фрагментов             | `6`                                  |
-| `RAG_SIMILARITY_THRESHOLD`   | Порог релевантности                         | `0.75`                               |
-| `TELEGRAM_TOKEN`             | Токен Telegram-бота                         | —                                    |
-| `TELEGRAM_USERNAME`          | Username бота                               | `MedLicenseBot`                      |
-| `TELEGRAM_ENABLED`           | Включить/выключить Telegram                 | `true`                               |
-| `DOCS_PATH`                  | Путь к папке с документами                  | `./docs`                             |
+- **Rate limit:** 10 сообщений в минуту на пользователя
+- **Длина ответа:** автоматическое разбиение на части по 4096 символов
 
-## Замена OpenRouter на Ollama (локальный LLM)
+### Настройка администраторов
+
+Укажите свой chat ID в `TELEGRAM_ADMIN_CHAT_IDS`:
+```env
+TELEGRAM_ADMIN_CHAT_IDS=123456789,987654321
+```
+
+Узнать свой chat ID: [@userinfobot](https://t.me/userinfobot)
+
+---
+
+## 🔒 Безопасность
+
+| Механизм                 | Описание                                                       |
+|-------------------------|----------------------------------------------------------------|
+| **Basic Auth**           | Защита `/reindex` и `/actuator/**` (кроме health/info/prometheus) |
+| **STATELESS сессии**     | Без cookie, без CSRF — чистый API                              |
+| **Admin whitelist (TG)** | Команда `/reindex` доступна только перечисленным chat ID       |
+| **Rate Limiting (HTTP)** | Per-IP ограничение запросов (TokenBucket)                      |
+| **Rate Limiting (TG)**   | Per-user ограничение сообщений (10/мин)                        |
+| **Нет утечки деталей**   | Ошибки 500 не раскрывают стектрейс или внутренние сообщения    |
+| **BCrypt**               | Пароль администратора хэшируется BCrypt                        |
+| **Non-root контейнер**   | Docker-образ запускается от пользователя `appuser` (UID 1001)  |
+
+---
+
+## 📊 Мониторинг и метрики
+
+### Actuator-эндпоинты
+
+| Эндпоинт                      | Доступ     | Описание               |
+|-------------------------------|------------|------------------------|
+| `/actuator/health`            | Публичный  | Статус приложения       |
+| `/actuator/info`              | Публичный  | Информация о приложении |
+| `/actuator/prometheus`        | Публичный  | Метрики для Prometheus  |
+| `/actuator/**` (остальные)    | ADMIN      | Детальная информация    |
+
+### Prometheus
+
+Метрики доступны по адресу `http://localhost:8080/actuator/prometheus`.
+
+Тег для фильтрации в Grafana: `application="medical-license-bot"`.
+
+### JSON-логирование
+
+Для production рекомендуется активировать профиль `json-logs`:
+```yaml
+SPRING_PROFILES_ACTIVE=json-logs
+```
+
+Формат: структурированный JSON (Logstash-совместимый) — удобно для ELK/Loki.
+
+### Graceful Shutdown
+
+Приложение корректно дожидается завершения текущих запросов (до 30 секунд).
+
+---
+
+## 📚 Документация
+
+Дополнительная документация расположена в папке [`docs/`](docs/):
+
+| Файл                                           | Описание                          |
+|------------------------------------------------|-----------------------------------|
+| [docs/architecture.md](docs/architecture.md)   | Архитектура и компоненты           |
+| [docs/deployment.md](docs/deployment.md)       | Руководство по развёртыванию       |
+| [docs/api.md](docs/api.md)                     | Полная документация REST API       |
+
+Все Java-классы содержат русскоязычный **JavaDoc** с описанием классов, методов и полей.
+
+---
+
+## 🔧 Разработка
+
+### Сборка и запуск
+
+```bash
+# Сборка
+./mvnw clean package -DskipTests
+
+# Запуск тестов (59 тестов)
+./mvnw test
+
+# Локальный запуск (нужен Qdrant на localhost:6334)
+./mvnw spring-boot:run
+```
+
+### Docker
+
+```bash
+# Сборка образа
+docker build -t medical-license-bot .
+
+# Запуск всего стека
+docker compose up -d
+
+# Просмотр логов
+docker compose logs -f app
+```
+
+### Замена OpenRouter на Ollama (локальный LLM)
 
 Для использования **Ollama** вместо OpenRouter:
 
-### 1. Установите Ollama
-
 ```bash
+# 1. Установите и запустите Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.1
 ollama pull nomic-embed-text
-```
 
-### 2. Измените переменные окружения
-
-```env
+# 2. Измените переменные в .env
 OPENROUTER_API_KEY=ollama
 OPENROUTER_BASE_URL=http://host.docker.internal:11434/v1
 OPENROUTER_MODEL=llama3.1
@@ -178,73 +367,64 @@ QDRANT_DIMENSION=768
 ```
 
 > **Примечание:** размерность (`QDRANT_DIMENSION`) зависит от модели эмбеддингов:
-> - `nomic-embed-text` → 768
-> - `openai/text-embedding-3-small` → 1536
-> - `openai/text-embedding-3-large` → 3072
+> `nomic-embed-text` → 768, `text-embedding-3-small` → 1536, `text-embedding-3-large` → 3072
 
-### 3. Добавьте extra_hosts в docker-compose.yml
+### Тестирование
 
-```yaml
-services:
-  app:
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-```
-
-### 4. Пересоберите и запустите
+- **59 тестов** (unit + integration)
+- Покрытие: контроллеры, сервисы, конфигурации, RAG-пайплайн
+- Spring Security тесты с `@WithMockUser`
 
 ```bash
-docker compose up -d --build
-curl -X POST http://localhost:8080/reindex
+./mvnw test
 ```
 
-## Локальная разработка (без Docker)
+### Добавление документов
 
-### Предварительные требования
+1. Положите `.doc`/`.docx` файлы в папку `docs/`
+2. Вызовите переиндексацию:
+   - **Telegram:** `/reindex` (от администратора)
+   - **REST:** `curl -X POST http://localhost:8080/reindex -u admin:пароль`
 
-- Java 21+
-- Maven 3.9+
-- Qdrant (запустите отдельно):
-  ```bash
-  docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.12.1
-  ```
-
-### Запуск
-
-```bash
-export OPENROUTER_API_KEY=sk-or-v1-ваш-ключ
-export TELEGRAM_TOKEN=ваш-токен
-mvn spring-boot:run
-```
-
-## Структура проекта
+### Структура проекта
 
 ```
-├── pom.xml
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── docs/                              # Документы для RAG
-│   └── .gitkeep
+├── pom.xml                              # Maven-конфигурация
+├── Dockerfile                           # Multi-stage сборка
+├── docker-compose.yml                   # Qdrant + приложение
+├── .env.example                         # Шаблон переменных окружения
+├── docs/                                # Документы для RAG + документация
+│   ├── architecture.md                  # Архитектура
+│   ├── deployment.md                    # Развёртывание
+│   └── api.md                           # REST API
 └── src/main/java/com/arteva/medbot/
-    ├── MedicalLicenseBotApplication.java
+    ├── MedicalLicenseBotApplication.java    # Точка входа
     ├── config/
-    │   ├── LlmConfig.java            # OpenRouter LLM + Embedding beans
-    │   ├── QdrantConfig.java          # Qdrant EmbeddingStore + collection mgmt
-    │   └── TelegramBotConfig.java     # Telegram bot registration
+    │   ├── SecurityConfig.java              # Spring Security (Basic Auth)
+    │   ├── RateLimitFilter.java             # Rate limiting по IP
+    │   ├── AppProperties.java               # Типобезопасные свойства
+    │   ├── LlmConfig.java                   # LLM + Embedding бины
+    │   ├── QdrantConfig.java                # Qdrant EmbeddingStore
+    │   └── TelegramBotConfig.java           # Регистрация Telegram-бота
     ├── controller/
-    │   └── AskController.java         # REST: POST /ask, POST /reindex
+    │   ├── AskController.java               # POST /ask, POST /reindex
+    │   └── GlobalExceptionHandler.java      # Обработка ошибок
     ├── model/
-    │   ├── AskRequest.java            # Request DTO
-    │   └── AskResponse.java           # Response DTO
+    │   ├── AskRequest.java                  # Запрос (вопрос)
+    │   └── AskResponse.java                 # Ответ (текст + источники)
     ├── rag/
-    │   ├── DocumentParser.java        # DOC/DOCX → text (Apache POI)
-    │   ├── DocumentIngestionService.java  # Ingestion pipeline
-    │   └── RagService.java            # Retrieval + LLM generation
-    └── service/
-        └── TelegramBotService.java    # Telegram long polling bot
+    │   ├── DocumentParser.java              # DOC/DOCX → текст (Apache POI)
+    │   ├── DocumentIngestionService.java    # Пайплайн индексации
+    │   ├── QdrantCollectionManager.java     # Управление коллекцией Qdrant
+    │   └── RagService.java                  # RAG: поиск + генерация
+    ├── service/
+    │   └── TelegramBotService.java          # Telegram Long Polling бот
+    └── util/
+        └── TokenBucket.java                 # Rate limiting (token bucket)
 ```
 
-## Лицензия
+---
 
-MIT
+## 📄 Лицензия
+
+MIT License. Подробности — в файле [LICENSE](LICENSE).

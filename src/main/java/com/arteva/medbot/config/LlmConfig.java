@@ -12,11 +12,32 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
 
+/**
+ * Конфигурация LLM и Embedding-моделей через OpenRouter.
+ * <p>
+ * Создаёт Spring-бины для:
+ * <ul>
+ *   <li>{@link ChatLanguageModel} — чат-модель для генерации ответов (120с таймаут, 2 повтора)</li>
+ *   <li>{@link EmbeddingModel} — модель эмбеддингов для векторизации текста (60с таймаут, 2 повтора)</li>
+ * </ul>
+ * <p>
+ * Обе модели используют OpenAI-совместимый API через LangChain4j.
+ * Логирование запросов/ответов отключено во избежание утечки данных.
+ */
 @Configuration
 public class LlmConfig {
 
     private static final Logger log = LoggerFactory.getLogger(LlmConfig.class);
 
+    /**
+     * Создаёт чат-модель для генерации ответов на вопросы пользователей.
+     *
+     * @param apiKey      API-ключ OpenRouter
+     * @param baseUrl     базовый URL API
+     * @param model       идентификатор модели
+     * @param temperature температура генерации
+     * @return сконфигурированная чат-модель
+     */
     @Bean
     public ChatLanguageModel chatLanguageModel(
             @Value("${openrouter.api-key}") String apiKey,
@@ -39,6 +60,14 @@ public class LlmConfig {
                 .build();
     }
 
+    /**
+     * Создаёт модель для генерации эмбеддингов (векторных представлений текста).
+     *
+     * @param apiKey             API-ключ OpenRouter
+     * @param baseUrl            базовый URL API
+     * @param embeddingModelName идентификатор embedding-модели
+     * @return сконфигурированная embedding-модель
+     */
     @Bean
     public EmbeddingModel embeddingModel(
             @Value("${openrouter.api-key}") String apiKey,

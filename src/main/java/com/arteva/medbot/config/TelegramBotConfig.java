@@ -14,12 +14,34 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import java.util.concurrent.ThreadPoolExecutor;
 
+/**
+ * Конфигурация Telegram-бота.
+ * <p>
+ * Активируется только при {@code telegram.enabled=true} (по умолчанию включена).
+ * Регистрирует бота в Telegram API и создаёт пул потоков
+ * для асинхронной обработки входящих сообщений.
+ * <p>
+ * Параметры пула потоков:
+ * <ul>
+ *   <li>Основные потоки: 4</li>
+ *   <li>Максимум потоков: 8</li>
+ *   <li>Очередь: 100 задач</li>
+ *   <li>Политика переполнения: {@code CallerRunsPolicy} (выполняется в потоке вызывающего)</li>
+ * </ul>
+ */
 @Configuration
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "true", matchIfMissing = true)
 public class TelegramBotConfig {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramBotConfig.class);
 
+    /**
+     * Регистрирует Telegram-бота для получения обновлений через long polling.
+     *
+     * @param botService экземпляр Telegram-бота
+     * @return настроенный Telegram API
+     * @throws TelegramApiException при ошибке регистрации
+     */
     @Bean
     public TelegramBotsApi telegramBotsApi(TelegramBotService botService) throws TelegramApiException {
         TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
@@ -28,6 +50,14 @@ public class TelegramBotConfig {
         return api;
     }
 
+    /**
+     * Пул потоков для асинхронной обработки Telegram-сообщений.
+     * <p>
+     * Отдельный пул гарантирует, что обработка сообщений
+     * не блокирует поток long polling.
+     *
+     * @return настроенный {@link TaskExecutor}
+     */
     @Bean
     public TaskExecutor telegramTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

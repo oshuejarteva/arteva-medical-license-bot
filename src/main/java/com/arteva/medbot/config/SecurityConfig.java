@@ -15,18 +15,35 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Security configuration.
+ * Конфигурация безопасности REST API на основе Spring Security.
  * <p>
- * - /ask is public (used by Telegram bot and external consumers)
- * - /reindex requires ADMIN role (Basic Auth)
- * - /actuator/health,info,prometheus are public
- * - /actuator/** (other endpoints) require ADMIN role
- * - All other paths are denied
+ * Правила доступа:
+ * <ul>
+ *   <li>{@code POST /ask} — публичный (используется Telegram-ботом и внешними клиентами)</li>
+ *   <li>{@code /actuator/health, info, prometheus} — публичные (мониторинг)</li>
+ *   <li>{@code POST /reindex} — требует роль ADMIN (Basic Auth)</li>
+ *   <li>{@code /actuator/**} (остальные) — требует роль ADMIN</li>
+ *   <li>Все прочие пути — запрещены ({@code denyAll})</li>
+ * </ul>
+ * <p>
+ * Особенности:
+ * <ul>
+ *   <li>CSRF отключён (стателесс API)</li>
+ *   <li>Сессии не создаются ({@code STATELESS})</li>
+ *   <li>Пользователь хранится в памяти ({@link InMemoryUserDetailsManager}) с BCrypt</li>
+ * </ul>
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /**
+     * Настройка цепочки фильтров безопасности.
+     *
+     * @param http конфигуратор Spring Security
+     * @return сконфигурированная цепочка фильтров
+     * @throws Exception при ошибке конфигурации
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -44,6 +61,16 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Создаёт хранилище пользователей в памяти с одним администратором.
+     * <p>
+     * Логин и пароль читаются из {@code api.admin.username} и {@code api.admin.password}.
+     *
+     * @param username        логин администратора
+     * @param password        пароль администратора (открытый текст, будет захэширован BCrypt)
+     * @param passwordEncoder энкодер паролей
+     * @return хранилище пользователей
+     */
     @Bean
     public UserDetailsService userDetailsService(
             @Value("${api.admin.username:admin}") String username,
@@ -58,6 +85,11 @@ public class SecurityConfig {
         );
     }
 
+    /**
+     * Бин BCrypt-энкодера для хэширования паролей.
+     *
+     * @return экземпляр {@link BCryptPasswordEncoder}
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

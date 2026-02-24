@@ -15,6 +15,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * REST-контроллер для работы с RAG-пайплайном.
+ * <p>
+ * Предоставляет эндпоинты:
+ * <ul>
+ *   <li>{@code POST /ask} — публичный, принимает вопрос и возвращает ответ на основе документов</li>
+ *   <li>{@code POST /reindex} — защищён (ADMIN), переиндексация документов</li>
+ * </ul>
+ */
 @RestController
 public class AskController {
 
@@ -29,8 +38,13 @@ public class AskController {
     }
 
     /**
-     * POST /ask
-     * Accepts a question and returns an answer based on indexed documents.
+     * Обработка вопроса пользователя.
+     * <p>
+     * Вопрос проходит через RAG-пайплайн:
+     * эмбеддинг → поиск в Qdrant → промпт → LLM → ответ.
+     *
+     * @param request валидированный запрос с текстом вопроса
+     * @return ответ с текстом и списком источников
      */
     @PostMapping("/ask")
     public ResponseEntity<AskResponse> ask(@Valid @RequestBody AskRequest request) {
@@ -40,9 +54,11 @@ public class AskController {
     }
 
     /**
-     * POST /reindex
-     * Re-reads all documents from disk, re-creates embeddings, and stores in Qdrant.
-     * Requires ADMIN role (Basic Auth).
+     * Переиндексация описывает документов с диска.
+     * <p>
+     * Требует роль ADMIN (Basic Auth). При параллельном вызове возвращает 409 Conflict.
+     *
+     * @return количество проиндексированных документов или 409 при конкурентном вызове
      */
     @PostMapping("/reindex")
     public ResponseEntity<Map<String, Object>> reindex() {

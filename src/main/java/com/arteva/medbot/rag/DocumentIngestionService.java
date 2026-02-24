@@ -15,14 +15,24 @@ import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Handles document ingestion pipeline:
- * 1. Read DOC/DOCX from disk
- * 2. Split into token-based chunks (1000 tokens, 200 overlap)
- * 3. Create embeddings via OpenRouter
- * 4. Store in Qdrant
+ * Сервис индексации документов (Document Ingestion Pipeline).
  * <p>
- * Reindex is protected by a lock to prevent concurrent destructive operations.
- * Documents are parsed BEFORE any collection modification to minimise data loss risk.
+ * Процесс индексации:
+ * <ol>
+ *   <li>Чтение DOC/DOCX файлов с диска ({@link DocumentParser})</li>
+ *   <li>Разбиение на чанки (1000 токенов с перекрытием 200)</li>
+ *   <li>Генерация эмбеддингов через OpenRouter</li>
+ *   <li>Сохранение в Qdrant</li>
+ * </ol>
+ * <p>
+ * Меры безопасности при переиндексации:
+ * <ul>
+ *   <li>{@link ReentrantLock} предотвращает конкурентные деструктивные операции</li>
+ *   <li>Документы парсятся <b>до</b> удаления коллекции — при ошибке парсинга данные сохраняются</li>
+ * </ul>
+ *
+ * @see DocumentParser
+ * @see QdrantCollectionManager
  */
 @Service
 public class DocumentIngestionService {
@@ -64,9 +74,11 @@ public class DocumentIngestionService {
     }
 
     /**
-     * Ingests all DOC/DOCX documents from the configured docs directory.
+     * Индексирует все DOC/DOCX-документы из настроенной директории.
+     * <p>
+     * Добавляет эмбеддинги к существующей коллекции без удаления старых.
      *
-     * @return number of documents ingested
+     * @return количество проиндексированных документов
      */
     public int ingest() {
         log.info("Starting document ingestion from: {}", docsPath);
@@ -84,17 +96,17 @@ public class DocumentIngestionService {
     }
 
     /**
-     * Drops the vector collection, recreates it, and re-ingests all documents.
+     * Полная переиндексация: удаляет коллекцию, пересоздаёт и повторно индексирует.
      * <p>
-     * Safety measures:
+     * Меры безопасности:
      * <ul>
-     *   <li>Non-reentrant lock prevents concurrent reindex</li>
-     *   <li>Documents are parsed FIRST — if parsing fails, existing data is preserved</li>
-     *   <li>Collection is only recreated after successful parsing</li>
+     *   <li>Non-reentrant lock предотвращает параллельные вызовы</li>
+     *   <li>Документы парсятся <b>ДО</b> удаления коллекции</li>
+     *   <li>При ошибке парсинга существующие данные сохраняются</li>
      * </ul>
      *
-     * @return number of documents re-ingested
-     * @throws IllegalStateException if another reindex is already running
+     * @return количество переиндексированных документов
+     * @throws IllegalStateException если переиндексация уже выполняется
      */
     public int reindex() {
         if (!reindexLock.tryLock()) {
