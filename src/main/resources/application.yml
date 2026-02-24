@@ -1,0 +1,44 @@
+# ============================================================
+# Medical License Bot — Application Configuration
+# ============================================================
+
+server:
+  port: 8080
+
+# --- OpenRouter (OpenAI-compatible LLM & Embeddings) ---
+openrouter:
+  api-key: ${OPENROUTER_API_KEY:sk-placeholder}
+  base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
+  model: ${OPENROUTER_MODEL:google/gemini-2.0-flash-001}
+  embedding-model: ${OPENROUTER_EMBEDDING_MODEL:openai/text-embedding-3-small}
+  temperature: ${OPENROUTER_TEMPERATURE:0.1}
+
+# --- Qdrant Vector Store ---
+qdrant:
+  host: ${QDRANT_HOST:localhost}
+  port: ${QDRANT_PORT:6334}
+  collection-name: ${QDRANT_COLLECTION:medical-documents}
+  dimension: ${QDRANT_DIMENSION:1536}
+
+# --- RAG Parameters ---
+rag:
+  top-k: ${RAG_TOP_K:6}
+  similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.75}
+
+# --- Telegram Bot ---
+telegram:
+  token: ${TELEGRAM_TOKEN:}
+  username: ${TELEGRAM_USERNAME:MedLicenseBot}
+  enabled: ${TELEGRAM_ENABLED:true}
+
+# --- Application ---
+app:
+  docs-path: ${DOCS_PATH:./docs}
+
+# --- Logging ---
+logging:
+  level:
+    root: INFO
+    com.arteva.medbot: INFO
+    dev.langchain4j: WARN
+    io.qdrant: WARN
