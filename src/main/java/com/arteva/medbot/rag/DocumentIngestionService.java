@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Handles document ingestion pipeline:
@@ -19,6 +20,9 @@ import java.util.List;
  * 2. Split into token-based chunks (1000 tokens, 200 overlap)
  * 3. Create embeddings via OpenRouter
  * 4. Store in Qdrant
+ * <p>
+ * Reindex is protected by a lock to prevent concurrent destructive operations.
+ * Documents are parsed BEFORE any collection modification to minimise data loss risk.
  */
 @Service
 public class DocumentIngestionService {
@@ -34,6 +38,7 @@ public class DocumentIngestionService {
     private final QdrantCollectionManager collectionManager;
     private final String docsPath;
     private final EmbeddingStoreIngestor ingestor;
+    private final ReentrantLock reindexLock = new ReentrantLock();
 
     public DocumentIngestionService(
             DocumentParser documentParser,
@@ -80,14 +85,43 @@ public class DocumentIngestionService {
 
     /**
      * Drops the vector collection, recreates it, and re-ingests all documents.
+     * <p>
+     * Safety measures:
+     * <ul>
+     *   <li>Non-reentrant lock prevents concurrent reindex</li>
+     *   <li>Documents are parsed FIRST — if parsing fails, existing data is preserved</li>
+     *   <li>Collection is only recreated after successful parsing</li>
+     * </ul>
      *
      * @return number of documents re-ingested
+     * @throws IllegalStateException if another reindex is already running
      */
     public int reindex() {
-        log.info("Starting full reindex...");
-        collectionManager.recreateCollection();
-        int count = ingest();
-        log.info("Reindex completed. {} documents indexed.", count);
-        return count;
+        if (!reindexLock.tryLock()) {
+            throw new IllegalStateException("Reindex is already in progress");
+        }
+        try {
+            log.info("Starting full reindex...");
+
+            // 1. Parse all documents FIRST — if this fails, existing data is preserved
+            List<Document> documents = documentParser.parseAll(docsPath);
+            if (documents.isEmpty()) {
+                log.warn("No documents found. Skipping reindex to preserve existing data.");
+                return 0;
+            }
+
+            log.info("Parsed {} documents. Recreating collection and ingesting...", documents.size());
+
+            // 2. Documents validated — safe to recreate collection
+            collectionManager.recreateCollection();
+
+            // 3. Ingest the already-parsed documents
+            ingestor.ingest(documents);
+
+            log.info("Reindex completed. {} documents indexed.", documents.size());
+            return documents.size();
+        } finally {
+            reindexLock.unlock();
+        }
     }
 }

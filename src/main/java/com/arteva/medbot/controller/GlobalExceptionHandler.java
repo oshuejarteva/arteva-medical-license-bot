@@ -59,7 +59,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(
                         "error", "Internal server error",
-                        "message", ex.getMessage() != null ? ex.getMessage() : "Unknown error"
+                        "message", "An unexpected error occurred"
                 ));
     }
 

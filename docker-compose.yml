@@ -1,5 +1,6 @@
 services:
   # ---- Qdrant Vector Store ----
+  # NOTE: In production, remove 'ports' and use 'expose' to restrict Qdrant to internal network only
   qdrant:
     image: qdrant/qdrant:v1.12.1
     container_name: qdrant
@@ -34,6 +35,11 @@ services:
       QDRANT_PORT: 6334
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
       TELEGRAM_USERNAME: ${TELEGRAM_USERNAME:-MedLicenseBot}
+      TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
+      API_ADMIN_PASSWORD: ${API_ADMIN_PASSWORD}
+      API_ADMIN_USERNAME: ${API_ADMIN_USERNAME:-admin}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-30}
+      SPRING_PROFILES_ACTIVE: json-logs
       DOCS_PATH: /app/docs
     volumes:
       - ./docs:/app/docs:ro

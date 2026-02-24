@@ -2,7 +2,9 @@ package com.arteva.medbot.rag;
 
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,54 +48,74 @@ class DocumentIngestionServiceTest {
 
     @Test
     void ingest_withNoDocuments_shouldReturnZero() {
-        // given
         when(documentParser.parseAll(DOCS_PATH)).thenReturn(Collections.emptyList());
 
-        // when
         int result = service.ingest();
 
-        // then
         assertEquals(0, result);
         verify(documentParser).parseAll(DOCS_PATH);
     }
 
     @Test
     void ingest_withDocuments_shouldCallParser() {
-        // given
-        List<Document> docs = List.of(
-                Document.from("Текст документа 1", Metadata.from("source", "doc1.docx")),
-                Document.from("Текст документа 2", Metadata.from("source", "doc2.docx"))
-        );
-
         // We verify that parseAll is called with the correct path.
-        // The full ingestor pipeline (embedding + storing) requires real models,
-        // and is covered in integration tests.
         verify(documentParser, never()).parseAll(anyString());
     }
 
     @Test
-    void reindex_shouldRecreateCollectionAndIngest() {
-        // given
-        when(documentParser.parseAll(DOCS_PATH)).thenReturn(Collections.emptyList());
+    void reindex_shouldParseFirstThenRecreateCollection() {
+        // given — documents are available
+        List<Document> docs = List.of(
+                Document.from("Текст 1", Metadata.from("source", "doc1.docx")));
+        when(documentParser.parseAll(DOCS_PATH)).thenReturn(docs);
         doNothing().when(collectionManager).recreateCollection();
+
+        // Stub embedding model so ingestor.ingest() can complete
+        Embedding fakeEmbedding = Embedding.from(new float[]{0.1f, 0.2f});
+        when(embeddingModel.embedAll(anyList()))
+                .thenReturn(new Response<>(List.of(fakeEmbedding)));
 
         // when
         int result = service.reindex();
 
         // then
+        assertEquals(1, result);
+        // Verify order: parseAll BEFORE recreateCollection
+        var inOrder = inOrder(documentParser, collectionManager);
+        inOrder.verify(documentParser).parseAll(DOCS_PATH);
+        inOrder.verify(collectionManager).recreateCollection();
+    }
+
+    @Test
+    void reindex_withNoDocuments_shouldSkipRecreateAndReturnZero() {
+        when(documentParser.parseAll(DOCS_PATH)).thenReturn(Collections.emptyList());
+
+        int result = service.reindex();
+
         assertEquals(0, result);
-        verify(collectionManager).recreateCollection();
-        verify(documentParser).parseAll(DOCS_PATH);
+        // Collection should NOT be recreated when there are no documents
+        verify(collectionManager, never()).recreateCollection();
     }
 
     @Test
     void reindex_whenRecreateCollectionFails_shouldPropagateException() {
-        // given
+        List<Document> docs = List.of(
+                Document.from("Текст", Metadata.from("source", "doc.docx")));
+        when(documentParser.parseAll(DOCS_PATH)).thenReturn(docs);
         doThrow(new RuntimeException("Qdrant is down"))
                 .when(collectionManager).recreateCollection();
 
-        // when / then
         RuntimeException ex = assertThrows(RuntimeException.class, () -> service.reindex());
         assertTrue(ex.getMessage().contains("Qdrant is down"));
+    }
+
+    @Test
+    void reindex_whenParsingFails_shouldNotRecreateCollection() {
+        when(documentParser.parseAll(DOCS_PATH)).thenThrow(new RuntimeException("IO error"));
+
+        assertThrows(RuntimeException.class, () -> service.reindex());
+
+        // Collection should be untouched when parsing fails
+        verify(collectionManager, never()).recreateCollection();
     }
 }

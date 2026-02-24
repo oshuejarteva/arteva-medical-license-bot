@@ -4,6 +4,21 @@
 
 server:
   port: 8080
+  shutdown: graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# --- REST API Security (Basic Auth for admin endpoints) ---
+api:
+  admin:
+    username: ${API_ADMIN_USERNAME:admin}
+    password: ${API_ADMIN_PASSWORD}
+
+# --- Rate Limiting ---
+rate-limit:
+  requests-per-minute: ${RATE_LIMIT_RPM:30}
 
 # --- OpenRouter (OpenAI-compatible LLM & Embeddings) ---
 openrouter:
@@ -30,6 +45,7 @@ telegram:
   token: ${TELEGRAM_TOKEN:}
   username: ${TELEGRAM_USERNAME:MedLicenseBot}
   enabled: ${TELEGRAM_ENABLED:true}
+  admin-chat-ids: ${TELEGRAM_ADMIN_CHAT_IDS:}
 
 # --- Application ---
 app:
@@ -41,10 +57,13 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
+  metrics:
+    tags:
+      application: medical-license-bot
 
 # --- Logging ---
 logging:

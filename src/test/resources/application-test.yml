@@ -4,6 +4,7 @@ telegram:
   enabled: false
   token: test-token
   username: TestBot
+  admin-chat-ids:
 
 openrouter:
   api-key: test-key
@@ -25,6 +26,18 @@ rag:
 app:
   docs-path: ./docs
   tokenizer-model: gpt-4o
+
+api:
+  admin:
+    username: admin
+    password: test-password
+
+rate-limit:
+  requests-per-minute: 100
+
+spring:
+  security:
+    enabled: false
 
 logging:
   level:
