@@ -1,6 +1,5 @@
 package com.arteva.medbot.rag;
 
-import com.arteva.medbot.config.QdrantConfig;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -30,16 +29,18 @@ class DocumentIngestionServiceTest {
     private QdrantEmbeddingStore embeddingStore;
 
     @Mock
-    private QdrantConfig qdrantConfig;
+    private QdrantCollectionManager collectionManager;
 
     private DocumentIngestionService service;
 
     private static final String DOCS_PATH = "/tmp/docs";
+    private static final String TOKENIZER_MODEL = "gpt-4o";
 
     @BeforeEach
     void setUp() {
         service = new DocumentIngestionService(
-                documentParser, embeddingModel, embeddingStore, qdrantConfig, DOCS_PATH);
+                documentParser, embeddingModel, embeddingStore,
+                collectionManager, DOCS_PATH, TOKENIZER_MODEL);
     }
 
     @Test
@@ -73,14 +74,14 @@ class DocumentIngestionServiceTest {
     void reindex_shouldRecreateCollectionAndIngest() {
         // given
         when(documentParser.parseAll(DOCS_PATH)).thenReturn(Collections.emptyList());
-        doNothing().when(qdrantConfig).recreateCollection();
+        doNothing().when(collectionManager).recreateCollection();
 
         // when
         int result = service.reindex();
 
         // then
         assertEquals(0, result);
-        verify(qdrantConfig).recreateCollection();
+        verify(collectionManager).recreateCollection();
         verify(documentParser).parseAll(DOCS_PATH);
     }
 
@@ -88,7 +89,7 @@ class DocumentIngestionServiceTest {
     void reindex_whenRecreateCollectionFails_shouldPropagateException() {
         // given
         doThrow(new RuntimeException("Qdrant is down"))
-                .when(qdrantConfig).recreateCollection();
+                .when(collectionManager).recreateCollection();
 
         // when / then
         RuntimeException ex = assertThrows(RuntimeException.class, () -> service.reindex());

@@ -1,0 +1,13 @@
+target/
+.git/
+.gitignore
+.env
+*.env
+*.env.*
+!.env.example
+docs/
+*.md
+*.log
+.idea/
+.vscode/
+*.iml

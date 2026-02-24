@@ -1,6 +1,5 @@
 package com.arteva.medbot.rag;
 
-import com.arteva.medbot.config.QdrantConfig;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -32,20 +31,31 @@ public class DocumentIngestionService {
     private final DocumentParser documentParser;
     private final EmbeddingModel embeddingModel;
     private final QdrantEmbeddingStore embeddingStore;
-    private final QdrantConfig qdrantConfig;
+    private final QdrantCollectionManager collectionManager;
     private final String docsPath;
+    private final EmbeddingStoreIngestor ingestor;
 
     public DocumentIngestionService(
             DocumentParser documentParser,
             EmbeddingModel embeddingModel,
             QdrantEmbeddingStore embeddingStore,
-            QdrantConfig qdrantConfig,
-            @Value("${app.docs-path}") String docsPath) {
+            QdrantCollectionManager collectionManager,
+            @Value("${app.docs-path}") String docsPath,
+            @Value("${app.tokenizer-model:gpt-4o}") String tokenizerModel) {
         this.documentParser = documentParser;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
-        this.qdrantConfig = qdrantConfig;
+        this.collectionManager = collectionManager;
         this.docsPath = docsPath;
+
+        this.ingestor = EmbeddingStoreIngestor.builder()
+                .documentSplitter(DocumentSplitters.recursive(
+                        MAX_SEGMENT_SIZE_TOKENS,
+                        OVERLAP_SIZE_TOKENS,
+                        new OpenAiTokenizer(tokenizerModel)))
+                .embeddingModel(embeddingModel)
+                .embeddingStore(embeddingStore)
+                .build();
     }
 
     /**
@@ -62,15 +72,6 @@ public class DocumentIngestionService {
             return 0;
         }
 
-        EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
-                .documentSplitter(DocumentSplitters.recursive(
-                        MAX_SEGMENT_SIZE_TOKENS,
-                        OVERLAP_SIZE_TOKENS,
-                        new OpenAiTokenizer("gpt-4o")))
-                .embeddingModel(embeddingModel)
-                .embeddingStore(embeddingStore)
-                .build();
-
         ingestor.ingest(documents);
 
         log.info("Successfully ingested {} documents", documents.size());
@@ -84,7 +85,7 @@ public class DocumentIngestionService {
      */
     public int reindex() {
         log.info("Starting full reindex...");
-        qdrantConfig.recreateCollection();
+        collectionManager.recreateCollection();
         int count = ingest();
         log.info("Reindex completed. {} documents indexed.", count);
         return count;

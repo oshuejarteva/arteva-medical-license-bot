@@ -24,6 +24,7 @@ rag:
 
 app:
   docs-path: ./docs
+  tokenizer-model: gpt-4o
 
 logging:
   level:

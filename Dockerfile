@@ -16,6 +16,10 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
 RUN groupadd --system appgroup && \
     useradd --system --gid appgroup appuser
@@ -33,7 +37,6 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
     "-XX:MaxRAMPercentage=75.0", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]

@@ -178,9 +178,9 @@ class RagServiceTest {
         // when
         AskResponse response = ragService.ask(question);
 
-        // then
+        // then — callLlm returns null on error, ask() returns empty sources
         assertTrue(response.answer().contains("Произошла ошибка"));
-        assertEquals(List.of("doc.docx"), response.sources());
+        assertTrue(response.sources().isEmpty());
     }
 
     @Test

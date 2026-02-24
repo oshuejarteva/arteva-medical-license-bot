@@ -72,7 +72,7 @@ public class RagService {
      * @return answer with source documents
      */
     public AskResponse ask(String question) {
-        log.info("Processing question: {}", question);
+        log.debug("Processing question: {}", question.length() > 200 ? question.substring(0, 200) + "..." : question);
 
         // 1. Embed the question
         Embedding queryEmbedding = embeddingModel.embed(question).content();
@@ -81,19 +81,28 @@ public class RagService {
         List<EmbeddingMatch<TextSegment>> matches = embeddingStore.findRelevant(
                 queryEmbedding, topK, similarityThreshold);
 
-        if (matches.isEmpty()) {
-            log.info("No relevant documents found for question: {}", question);
+        // Filter out matches with null embedded segments
+        List<EmbeddingMatch<TextSegment>> validMatches = matches.stream()
+                .filter(m -> m.embedded() != null)
+                .toList();
+
+        if (validMatches.isEmpty()) {
+            log.info("No relevant documents found for the question");
             return AskResponse.noInfo();
         }
 
-        log.info("Found {} relevant chunks (threshold={})", matches.size(), similarityThreshold);
+        log.info("Found {} relevant chunks (threshold={})", validMatches.size(), similarityThreshold);
 
         // 3. Extract context and sources
-        String context = buildContext(matches);
-        List<String> sources = extractSources(matches);
+        String context = buildContext(validMatches);
+        List<String> sources = extractSources(validMatches);
 
         // 4. Call LLM with context
         String answer = callLlm(context, question);
+        if (answer == null) {
+            return new AskResponse(
+                    "Произошла ошибка при генерации ответа. Попробуйте позже.", List.of());
+        }
 
         log.info("Generated answer from {} sources: {}", sources.size(), sources);
         return new AskResponse(answer, sources);
@@ -118,6 +127,7 @@ public class RagService {
 
     private List<String> extractSources(List<EmbeddingMatch<TextSegment>> matches) {
         Set<String> sources = matches.stream()
+                .filter(m -> m.embedded() != null)
                 .map(m -> m.embedded().metadata().getString("source"))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -143,7 +153,7 @@ public class RagService {
             return response.content().text();
         } catch (Exception e) {
             log.error("LLM call failed", e);
-            return "Произошла ошибка при генерации ответа. Попробуйте позже.";
+            return null;
         }
     }
 }
